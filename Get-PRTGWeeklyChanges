@@ -1,0 +1,99 @@
+<#
+	PRTG Weekly Changes
+This script will check for changes made to devices and sensors over the past week. This will also find deletes and adds
+Script outputs two files to the C:\Temp directory
+DeviceHistory<date>: This file lists the changes made to devices
+SensorHistory<date>: This file lists all changes made to sensors
+
+
+Prerequisites:
+Must have PRTG Login
+Must have Powershell v5 or higher
+Must have the PrtgAPI powershell module installed
+	install-module PrtgAPI
+
+
+Author: Erik Crider
+Date: 11/23/2020
+
+Changes needed to work in your environment
+Line 36 - Update with FQDN of your PRTG server
+
+#>
+
+
+## Variable creation
+$date = (get-date -uformat "%m-%d-%Y-%R" | ForEach-Object { $_ -replace ":", "." }) 
+$DeviceHistoryOutput = "c:\temp\DeviceHistory" + $Date+'.csv' 
+$DevHistory = @()
+$DevHistDatacoll = @()
+$DevHistdataObject = @()
+$AllSensors = @()
+$SensorHistory = @()
+$SensorHistoryOutput = "c:\temp\SensorHistory" + $Date+'.csv' 
+
+##	Connect to PRTG, enter credentials
+Connect-PrtgServer PRTG.Contoso.com
+
+##	Get all PRTG Devices
+write-host "Getting Devices"
+$AllDevices = Get-Device
+
+##	Get all modifications to devices from the past week
+foreach ($dev in $AllDevices){
+$DevHistory += Get-ModificationHistory -id $dev.id  | where {$_.datetime -gt ((Get-Date).AddDays(-7)).Date}
+}
+
+##	Add the Device Name to the list of modifications
+$DevHistDatacoll = @()
+$DevHistdataObject = @()
+Foreach ($DH in $DevHistory) {
+$IDtoName = $AllDevices | where {$_.ID -eq $dh.ObjectID}
+$DevHistdataObject = New-Object PSObject
+Add-Member -inputObject $DevHistdataObject -memberType NoteProperty -name "DeviceName" -value $IDtoName.Name
+Add-Member -inputObject $DevHistdataObject -memberType NoteProperty -name "ObjectID" -value $DH.ObjectID
+Add-Member -inputObject $DevHistdataObject -memberType NoteProperty -name "DateTime" -value $DH.DateTime
+Add-Member -inputObject $DevHistdataObject -memberType NoteProperty -name "UserName" -value $DH.Username
+Add-Member -inputObject $DevHistdataObject -memberType NoteProperty -name "Message" -value $DH.Message
+
+[int]$DevcurrentItem = [array]::indexof($Devhistory,$DH)
+Write-Progress -Activity "Getting Device History" -Status "Device $($DevcurrentItem) of $($Devhistory.Count - 1) - $([math]::round((($DevcurrentItem + 1)/$DevHistory.Count),2) * 100)%  - Currently checking - $($IDtoName.Name)" -PercentComplete $([float](($DevcurrentItem + 1)/$DevHistory.Count) * 100)
+$DevHistdataColl += $DevHistdataObject
+}
+
+
+
+##	Output modifications to the C:\Temp directory
+$DevHistDatacoll | export-csv $DeviceHistoryOutput -NoTypeInformation
+
+
+##	Get all PRTG sensors
+write-host "Getting Sensors"
+$AllSensors = Get-Sensor
+
+##	Get all modifications to sensors from the past week
+Foreach ($Sensor in $AllSensors){
+$SensorHistory += Get-modificationHistory -Id $Sensor.ID | where {$_.datetime -gt ((Get-Date).AddDays(-7)).Date}
+[int]$SensorCurrentItem = [array]::indexof($AllSensors,$Sensor)
+Write-Progress -Activity "Getting Sensor Modifications" -Status "Sensor $($SensorCurrentItem) of $($AllSensors.Count - 1) - $([math]::round((($SensorCurrentItem + 1)/$AllSensors.Count),2) * 100)% - Currently checking - $($Sensor.Name)" -PercentComplete $([float](($SensorCurrentItem + 1)/$AllSensors.Count) * 100)
+}
+
+##	Add the Device Name to the list of modifications
+$SensorHistDatacoll = @()
+Foreach ($SH in $SensorHistory){
+$SensorIDtoName = $AllSensors | where {$_.ID -eq $SH.ObjectID}
+$SensorIDtoName2 = $AllDevices | where {$_.ID -eq $SensorIDtoName.ParentID}
+$SensorHistdataObject = New-Object PSObject
+Add-Member -inputObject $SensorHistdataObject -memberType NoteProperty -name "DeviceName" -value $SensorIDtoName2.Name
+Add-Member -inputObject $SensorHistdataObject -memberType NoteProperty -name "ObjectID" -value $SH.ObjectID
+Add-Member -inputObject $SensorHistdataObject -memberType NoteProperty -name "DateTime" -value $SH.DateTime
+Add-Member -inputObject $SensorHistdataObject -memberType NoteProperty -name "UserName" -value $SH.Username
+Add-Member -inputObject $SensorHistdataObject -memberType NoteProperty -name "Message" -value $SH.Message
+$SensorHistDatacoll += $SensorHistdataObject
+}
+
+
+##	Output modifications to the C:\Temp directory
+$SensorHistDatacoll | export-csv $SensorHistoryOutput -NoTypeInformation
+ 
+
