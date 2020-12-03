@@ -95,5 +95,8 @@ $SensorHistDatacoll += $SensorHistdataObject
 
 ##	Output modifications to the C:\Temp directory
 $SensorHistDatacoll | export-csv $SensorHistoryOutput -NoTypeInformation
- 
+
+##  Output to screen the file locations
+Write-host "Device History file location: $DeviceHistoryOutput"
+Write-host "Sensor History file location: $SensorHistoryOutput"
 
